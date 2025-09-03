@@ -20,29 +20,52 @@ headers = {
     "Accept": "application/json"
 }
 
-# 🔹 Start with no filter
-body = {
-    "filter": []
-}
+# Try different body formats
+bodies = [
+    {
+        "filter": [
+            {"op": "gte", "field": "createDate", "value": "2025-05-13T00:00:00Z"}
+        ]
+    },
+    {
+        "queryModel": {
+            "filter": [
+                {"op": "gte", "field": "createDate", "value": "2025-05-13T00:00:00Z"}
+            ]
+        }
+    },
+    {
+        "queryModel": {
+            "filters": [
+                {"op": "gte", "field": "createDate", "value": "2025-05-13T00:00:00Z"}
+            ]
+        }
+    }
+]
 
+url = f"{API_ZONE}/v1.0/Tickets/query"
 tickets = []
-next_url = f"{API_ZONE}/v1.0/Tickets/query"
 
-while next_url:
-    print(f"Fetching: {next_url}")
-    resp = requests.post(next_url, headers=headers, json=body if next_url.endswith("/query") else None)
+for body in bodies:
+    print(f"🔎 Trying body format: {body}")
+    resp = requests.post(url, headers=headers, json=body)
+    print("Status:", resp.status_code)
 
-    if resp.status_code != 200:
-        raise Exception(f"Error {resp.status_code}: {resp.text}")
+    if resp.status_code == 200:
+        data = resp.json()
+        tickets = data.get("items", [])
+        print(f"✅ Success with this format! Got {len(tickets)} tickets.")
+        break
+    else:
+        print("❌ Failed with:", resp.text)
 
-    data = resp.json()
-    items = data.get("items", [])
-    tickets.extend(items)
+if not tickets:
+    raise Exception("All body formats failed. Check API docs for your zone.")
 
-    # pagination
-    next_url = data.get("pageDetails", {}).get("nextPageUrl")
-
-# Save to DataFrame
+# Save to CSV
 df = pd.DataFrame(tickets)
-df.to_csv(CSV_FILE, index=False)
-print(f"✅ Saved {len(df)} tickets to {CSV_FILE}")
+if not df.empty:
+    df.to_csv(CSV_FILE, index=False)
+    print(f"Saved {len(df)} tickets to {CSV_FILE}")
+else:
+    print("⚠️ No tickets returned.")
